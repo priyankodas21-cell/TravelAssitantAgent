@@ -27,11 +27,11 @@ from project_lib import (
     DEFAULT_CONTEXT,
     ItineraryAgent,
     ItineraryRevisionAgent,
+    READ_ONLY_MODEL_DEFAULT,
+    REASONING_MODEL_DEFAULT,
     TravelPlan,
     VacationInfo,
 )
-
-DEFAULT_MODEL = "gpt-4.1-mini"
 
 app = FastAPI(title="AgentsVille Trip Planner API")
 
@@ -83,7 +83,9 @@ async def plan_trip(
         vacation_info=request.vacation_info,
         context=context,
         client=client,
-        model=request.model or DEFAULT_MODEL,
+        # Privilege separation: this agent has no tools, so it is restricted to the
+        # cheaper read-only model unless the caller explicitly overrides it.
+        model=request.model or READ_ONLY_MODEL_DEFAULT,
     )
     try:
         # Run the blocking OpenAI call in a worker thread so this request
@@ -107,7 +109,8 @@ async def revise_trip(
         vacation_info=request.vacation_info,
         context=context,
         client=client,
-        model=request.model or DEFAULT_MODEL,
+        # Privilege separation: only this tool-calling agent uses the reasoning model.
+        model=request.model or REASONING_MODEL_DEFAULT,
     )
     try:
         return await asyncio.to_thread(agent.run_react_cycle, request.travel_plan)
