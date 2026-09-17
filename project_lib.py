@@ -10,7 +10,7 @@ from typing import List, Mapping, Optional
 import numexpr as ne
 from json_repair import repair_json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 SINGLE_TAB_LEVEL = 4
 
@@ -837,6 +837,55 @@ DEFAULT_CONTEXT = AgentsVilleContext()
 # Domain models (stateless Pydantic models; single source of truth for both
 # the notebook and any service, e.g. api.py, that imports this module)
 # ---------------------------------------------------------------------------
+def _coerce_lax_date(value):
+    """Coerces common non-ISO date strings to `datetime.date` before Pydantic validates it.
+
+    Pydantic v2 already truncates ISO datetime strings (e.g. "2025-06-10T00:00:00") to a
+    date, but formats like "June 10, 2025" raise instead of coercing. This is a defensive,
+    input-validation-at-the-boundary fallback for LLM-produced dates that aren't strict ISO.
+
+    Args:
+        value: The raw value from (possibly LLM-generated) JSON.
+
+    Returns:
+        A `datetime.date` if `value` could be parsed as a date string, otherwise `value`
+        unchanged (letting Pydantic's own validation raise/coerce as normal).
+    """
+    if not isinstance(value, str):
+        return value
+    try:
+        return datetime.date.fromisoformat(value.split("T")[0])
+    except ValueError:
+        pass
+    try:
+        return datetime.datetime.strptime(value, "%B %d, %Y").date()
+    except ValueError:
+        return value
+
+
+def _coerce_price(value):
+    """Rounds float/string monetary values instead of silently truncating them.
+
+    `int(129.99)` == 129, which could let a plan pass a budget check it should have
+    failed by a fraction of a currency unit. Rounding first avoids that class of bug.
+
+    Args:
+        value: The raw price value from (possibly LLM-generated) JSON.
+
+    Returns:
+        The rounded integer price if `value` was a float/numeric string, otherwise
+        `value` unchanged.
+    """
+    if isinstance(value, float):
+        return int(round(value))
+    if isinstance(value, str):
+        try:
+            return int(round(float(value)))
+        except ValueError:
+            return value
+    return value
+
+
 class Traveler(BaseModel):
     name: str
     age: int
@@ -857,6 +906,11 @@ class VacationInfo(BaseModel):
     travelers: List[Traveler]
     budget: int
 
+    @field_validator("date_of_arrival", "date_of_departure", mode="before")
+    @classmethod
+    def _validate_dates(cls, v):
+        return _coerce_lax_date(v)
+
 
 class Weather(BaseModel):
     temperature: float
@@ -874,6 +928,11 @@ class Activity(BaseModel):
     price: int
     related_interests: List[Interest]
 
+    @field_validator("price", mode="before")
+    @classmethod
+    def _validate_price(cls, v):
+        return _coerce_price(v)
+
 
 class ActivityRecommendation(BaseModel):
     activity: Activity
@@ -885,6 +944,11 @@ class ItineraryDay(BaseModel):
     weather: Weather
     activity_recommendations: List[ActivityRecommendation]
 
+    @field_validator("date", mode="before")
+    @classmethod
+    def _validate_date(cls, v):
+        return _coerce_lax_date(v)
+
 
 class TravelPlan(BaseModel):
     city: str
@@ -892,6 +956,16 @@ class TravelPlan(BaseModel):
     end_date: datetime.date
     total_cost: int
     itinerary_days: List[ItineraryDay]
+
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def _validate_dates(cls, v):
+        return _coerce_lax_date(v)
+
+    @field_validator("total_cost", mode="before")
+    @classmethod
+    def _validate_total_cost(cls, v):
+        return _coerce_price(v)
 
 
 class AgentError(Exception):
