@@ -404,16 +404,21 @@ def do_chat_completion(messages: list[dict[str, str]], model=None, client=None, 
         ...     {"role": "user", "content": "Hello, how are you?"},
         ...     {"role": "assistant", "content": "I'm good, thanks!"},
         ... ]
-        >>> from unittest.mock import patch
-        >>> with patch('openai.OpenAI') as mock_openai:
-        ...     # Setup mock response
-        ...     mock_client = mock_openai.return_value
-        ...     mock_chat = mock_client.chat
-        ...     mock_completions = mock_chat.completions
-        ...     mock_create = mock_completions.create
-        ...     mock_response = mock_create.return_value
-        ...     mock_response.choices = [type('obj', (object,), {'message': type('msg', (object,), {'content': "I'm good, thanks!"})()})]
-        ...     response = do_chat_completion(messages)
+        >>> mock_client = type('Client', (), {})()
+        >>> mock_client.chat = type('Chat', (), {})()
+        >>> mock_client.chat.completions = type('Completions', (), {})()
+        >>> mock_client.chat.completions.create = lambda **kwargs: type(
+        ...     'Response', (), {
+        ...         'choices': [type(
+        ...             'Choice', (), {
+        ...                 'message': type(
+        ...                     'Message', (), {'content': "I'm good, thanks!"}
+        ...                 )()
+        ...             }
+        ...         )()]
+        ...     }
+        ... )()
+        >>> response = do_chat_completion(messages, model="test-model", client=mock_client)
         >>> response
         "I'm good, thanks!"
     """
