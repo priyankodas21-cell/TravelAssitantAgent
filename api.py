@@ -16,7 +16,7 @@ HTTP endpoints with request-scoped dependency injection:
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
 from openai import OpenAI
@@ -59,13 +59,13 @@ def get_openai_client() -> OpenAI:
 
 class PlanTripRequest(BaseModel):
     vacation_info: VacationInfo
-    model: Optional[str] = Field(default=None)
+    model: Optional[Literal["gpt-4.1-nano"]] = Field(default=None)
 
 
 class ReviseTripRequest(BaseModel):
     vacation_info: VacationInfo
     travel_plan: TravelPlan
-    model: Optional[str] = Field(default=None)
+    model: Optional[Literal["gpt-4.1-mini"]] = Field(default=None)
 
 
 @app.post("/itinerary", response_model=TravelPlan)
