@@ -83,8 +83,7 @@ async def plan_trip(
         vacation_info=request.vacation_info,
         context=context,
         client=client,
-        # Privilege separation: this agent has no tools, so it is restricted to the
-        # cheaper read-only model unless the caller explicitly overrides it.
+        # Privilege separation: this agent has no tools, so it is restricted to the cheaper read-only model.
         model=request.model or READ_ONLY_MODEL_DEFAULT,
     )
     try:
